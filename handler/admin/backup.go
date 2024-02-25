@@ -1,7 +1,9 @@
 package admin
 
 import (
+	"errors"
 	"net/http"
+	"path"
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
@@ -28,7 +30,7 @@ func NewBackupHandler(backupService service.BackupService) *BackupHandler {
 }
 
 func (b *BackupHandler) GetWorkDirBackup(ctx *gin.Context) (interface{}, error) {
-	filename, err := util.ParamString(ctx, "filename")
+	filename, err := util.MustGetQueryString(ctx, "filename")
 	if err != nil {
 		return nil, err
 	}
@@ -36,15 +38,15 @@ func (b *BackupHandler) GetWorkDirBackup(ctx *gin.Context) (interface{}, error) 
 }
 
 func (b *BackupHandler) GetDataBackup(ctx *gin.Context) (interface{}, error) {
-	filename, err := util.ParamString(ctx, "filename")
+	filename, err := util.MustGetQueryString(ctx, "filename")
 	if err != nil {
 		return nil, err
 	}
-	return b.BackupService.GetBackup(ctx, filepath.Join(config.DataExportDir, filename), service.JsonData)
+	return b.BackupService.GetBackup(ctx, filepath.Join(config.DataExportDir, filename), service.JSONData)
 }
 
 func (b *BackupHandler) GetMarkDownBackup(ctx *gin.Context) (interface{}, error) {
-	filename, err := util.ParamString(ctx, "filename")
+	filename, err := util.MustGetQueryString(ctx, "filename")
 	if err != nil {
 		return nil, err
 	}
@@ -52,11 +54,25 @@ func (b *BackupHandler) GetMarkDownBackup(ctx *gin.Context) (interface{}, error)
 }
 
 func (b *BackupHandler) BackupWholeSite(ctx *gin.Context) (interface{}, error) {
-	return b.BackupService.BackupWholeSite(ctx)
+	toBackupItems := make([]string, 0)
+	err := ctx.ShouldBindJSON(&toBackupItems)
+	if err != nil {
+		e := validator.ValidationErrors{}
+		if errors.As(err, &e) {
+			return nil, xerr.WithStatus(e, xerr.StatusBadRequest).WithMsg(trans.Translate(e))
+		}
+		return nil, xerr.WithStatus(err, xerr.StatusBadRequest)
+	}
+
+	return b.BackupService.BackupWholeSite(ctx, toBackupItems)
 }
 
 func (b *BackupHandler) ListBackups(ctx *gin.Context) (interface{}, error) {
 	return b.BackupService.ListFiles(ctx, config.BackupDir, service.WholeSite)
+}
+
+func (b *BackupHandler) ListToBackupItems(ctx *gin.Context) (interface{}, error) {
+	return b.BackupService.ListToBackupItems(ctx)
 }
 
 func (b *BackupHandler) HandleWorkDir(ctx *gin.Context) {
@@ -65,8 +81,8 @@ func (b *BackupHandler) HandleWorkDir(ctx *gin.Context) {
 		wrapHandler(b.GetWorkDirBackup)(ctx)
 		return
 	}
-	if path == "/api/admin/backups/work-dir" || path == "/api/admin/backups/work-dir/" {
-		wrapHandler(b.ListBackups)(ctx)
+	if path == "/api/admin/backups/work-dir/options" || path == "/api/admin/backups/work-dir/options/" {
+		wrapHandler(b.ListToBackupItems)(ctx)
 		return
 	}
 	b.DownloadBackups(ctx)
@@ -84,14 +100,14 @@ func (b *BackupHandler) DownloadBackups(ctx *gin.Context) {
 	filePath, err := b.BackupService.GetBackupFilePath(ctx, config.BackupDir, filename)
 	if err != nil {
 		log.CtxErrorf(ctx, "err=%+v", err)
-		status := xerr.GetHttpStatus(err)
+		status := xerr.GetHTTPStatus(err)
 		ctx.JSON(status, &dto.BaseDTO{Status: status, Message: xerr.GetMessage(err)})
 	}
 	ctx.File(filePath)
 }
 
 func (b *BackupHandler) DeleteBackups(ctx *gin.Context) (interface{}, error) {
-	filename, err := util.ParamString(ctx, "filename")
+	filename, err := util.MustGetQueryString(ctx, "filename")
 	if err != nil {
 		return nil, err
 	}
@@ -102,6 +118,10 @@ func (b *BackupHandler) ImportMarkdown(ctx *gin.Context) (interface{}, error) {
 	fileHeader, err := ctx.FormFile("file")
 	if err != nil {
 		return nil, xerr.WithMsg(err, "上传文件错误").WithStatus(xerr.StatusBadRequest)
+	}
+	filenameExt := path.Ext(fileHeader.Filename)
+	if filenameExt != ".md" && filenameExt != ".markdown" && filenameExt != ".mdown" {
+		return nil, xerr.WithMsg(err, "Unsupported format").WithStatus(xerr.StatusBadRequest)
 	}
 	return nil, b.BackupService.ImportMarkdown(ctx, fileHeader)
 }
@@ -124,7 +144,7 @@ func (b *BackupHandler) HandleData(ctx *gin.Context) {
 }
 
 func (b *BackupHandler) ListExportData(ctx *gin.Context) (interface{}, error) {
-	return b.BackupService.ListFiles(ctx, config.DataExportDir, service.JsonData)
+	return b.BackupService.ListFiles(ctx, config.DataExportDir, service.JSONData)
 }
 
 func (b *BackupHandler) DownloadData(ctx *gin.Context) {
@@ -138,7 +158,7 @@ func (b *BackupHandler) DownloadData(ctx *gin.Context) {
 	filePath, err := b.BackupService.GetBackupFilePath(ctx, config.DataExportDir, filename)
 	if err != nil {
 		log.CtxErrorf(ctx, "err=%+v", err)
-		status := xerr.GetHttpStatus(err)
+		status := xerr.GetHTTPStatus(err)
 		ctx.JSON(status, &dto.BaseDTO{Status: status, Message: xerr.GetMessage(err)})
 	}
 	ctx.File(filePath)
@@ -156,7 +176,8 @@ func (b *BackupHandler) ExportMarkdown(ctx *gin.Context) (interface{}, error) {
 	var exportMarkdownParam param.ExportMarkdown
 	err := ctx.ShouldBindJSON(&exportMarkdownParam)
 	if err != nil {
-		if e, ok := err.(validator.ValidationErrors); ok {
+		e := validator.ValidationErrors{}
+		if errors.As(err, &e) {
 			return nil, xerr.WithStatus(e, xerr.StatusBadRequest).WithMsg(trans.Translate(e))
 		}
 		return nil, xerr.WithStatus(err, xerr.StatusBadRequest)
@@ -169,7 +190,7 @@ func (b *BackupHandler) ListMarkdowns(ctx *gin.Context) (interface{}, error) {
 }
 
 func (b *BackupHandler) DeleteMarkdowns(ctx *gin.Context) (interface{}, error) {
-	filename, err := util.ParamString(ctx, "filename")
+	filename, err := util.MustGetQueryString(ctx, "filename")
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +209,7 @@ func (b *BackupHandler) DownloadMarkdown(ctx *gin.Context) {
 	filePath, err := b.BackupService.GetBackupFilePath(ctx, config.BackupMarkdownDir, filename)
 	if err != nil {
 		log.CtxErrorf(ctx, "err=%+v", err)
-		status := xerr.GetHttpStatus(err)
+		status := xerr.GetHTTPStatus(err)
 		ctx.JSON(status, &dto.BaseDTO{Status: status, Message: xerr.GetMessage(err)})
 	}
 	ctx.File(filePath)
@@ -201,7 +222,7 @@ func wrapHandler(handler wrapperHandler) gin.HandlerFunc {
 		data, err := handler(ctx)
 		if err != nil {
 			log.CtxErrorf(ctx, "err=%+v", err)
-			status := xerr.GetHttpStatus(err)
+			status := xerr.GetHTTPStatus(err)
 			ctx.JSON(status, &dto.BaseDTO{Status: status, Message: xerr.GetMessage(err)})
 			return
 		}

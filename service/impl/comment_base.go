@@ -108,7 +108,7 @@ func (b baseCommentServiceImpl) DeleteBatch(ctx context.Context, commentIDs []in
 	if err != nil {
 		return WrapDBErr(err)
 	}
-	if deleteResult.RowsAffected != 1 {
+	if deleteResult.RowsAffected != int64(len(commentIDs)) {
 		return xerr.NoType.New("").WithMsg("delete comment failed")
 	}
 	return nil
@@ -219,7 +219,6 @@ func (b baseCommentServiceImpl) Create(ctx context.Context, comment *entity.Comm
 				Comment: comment,
 			})
 		}()
-
 	} else {
 		go func() {
 			b.Event.Publish(context.TODO(), &event.CommentNewEvent{
@@ -308,7 +307,7 @@ func (*baseCommentServiceImpl) CountChildren(ctx context.Context, parentCommentI
 	}
 
 	commentDAL := dal.GetQueryByCtx(ctx).Comment
-	err := commentDAL.WithContext(ctx).Select(commentDAL.ParentID, commentDAL.ID.Count()).Where(commentDAL.Status.Eq(consts.CommentStatusPublished), commentDAL.ID.In(parentCommentIDs...)).Group(commentDAL.ParentID).Scan(&projections)
+	err := commentDAL.WithContext(ctx).Select(commentDAL.ParentID, commentDAL.ID.Count().As("comment_count")).Where(commentDAL.Status.Eq(consts.CommentStatusPublished), commentDAL.ParentID.In(parentCommentIDs...)).Group(commentDAL.ParentID).Scan(&projections)
 	if err != nil {
 		return nil, WrapDBErr(err)
 	}
@@ -320,14 +319,16 @@ func (*baseCommentServiceImpl) CountChildren(ctx context.Context, parentCommentI
 }
 
 func (b *baseCommentServiceImpl) GetChildren(ctx context.Context, parentCommentID int32, contentID int32, commentType consts.CommentType) ([]*entity.Comment, error) {
-	allComments, err := b.GetByContentID(ctx, int32(contentID), commentType, nil)
+	allComments, err := b.GetByContentID(ctx, contentID, commentType, nil)
 	if err != nil {
 		return nil, err
 	}
 	children := make([]*entity.Comment, 0)
 	parentIDMap := make(map[int32][]*entity.Comment, 0)
 	for _, comment := range allComments {
-		parentIDMap[comment.ParentID] = append(parentIDMap[comment.ParentID], comment)
+		if comment.Status == consts.CommentStatusPublished {
+			parentIDMap[comment.ParentID] = append(parentIDMap[comment.ParentID], comment)
+		}
 	}
 	queue := util.NewQueue[int32]()
 	queue.Push(parentCommentID)
@@ -339,4 +340,16 @@ func (b *baseCommentServiceImpl) GetChildren(ctx context.Context, parentCommentI
 		}
 	}
 	return children, nil
+}
+
+func (b baseCommentServiceImpl) IncreaseLike(ctx context.Context, commentID int32) error {
+	commentDAL := dal.GetQueryByCtx(ctx).Comment
+	info, err := commentDAL.WithContext(ctx).Where(commentDAL.ID.Eq(commentID)).UpdateSimple(commentDAL.Likes.Add(1))
+	if err != nil {
+		return WrapDBErr(err)
+	}
+	if info.RowsAffected != 1 {
+		return xerr.NoType.New("increase comment like failed postID=%v", commentID).WithStatus(xerr.StatusBadRequest).WithMsg("failed to like comment")
+	}
+	return nil
 }

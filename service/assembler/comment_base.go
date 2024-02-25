@@ -50,9 +50,7 @@ func (*baseCommentAssembler) ClearSensitiveField(ctx context.Context, comments [
 func (b *baseCommentAssembler) ConvertToWithHasChildren(ctx context.Context, comments []*entity.Comment) ([]*vo.CommentWithHasChildren, error) {
 	parentIDs := make([]int32, 0)
 	for _, comment := range comments {
-		if comment.ParentID != 0 {
-			parentIDs = append(parentIDs, comment.ID)
-		}
+		parentIDs = append(parentIDs, comment.ID)
 	}
 	dtos, err := b.ConvertToDTOList(ctx, comments)
 	if err != nil {
@@ -69,8 +67,10 @@ func (b *baseCommentAssembler) ConvertToWithHasChildren(ctx context.Context, com
 		}
 		if count, ok := countMap[commentDTO.ID]; ok && count > 0 {
 			commentWithHasChildren.HasChildren = true
+			commentWithHasChildren.ChildrenCount = count
 		} else {
 			commentWithHasChildren.HasChildren = false
+			commentWithHasChildren.ChildrenCount = 0
 		}
 		result = append(result, commentWithHasChildren)
 	}
@@ -82,7 +82,7 @@ func (b *baseCommentAssembler) ConvertToDTO(ctx context.Context, comment *entity
 		ID:                comment.ID,
 		Author:            comment.Author,
 		Email:             comment.Email,
-		IpAddress:         comment.IPAddress,
+		IPAddress:         comment.IPAddress,
 		AuthorURL:         comment.AuthorURL,
 		GravatarMD5:       comment.GravatarMd5,
 		Content:           comment.Content,
@@ -92,6 +92,7 @@ func (b *baseCommentAssembler) ConvertToDTO(ctx context.Context, comment *entity
 		IsAdmin:           comment.IsAdmin,
 		AllowNotification: comment.AllowNotification,
 		CreateTime:        comment.CreateTime.UnixMilli(),
+		Likes:             comment.Likes,
 	}
 	avatarURL, err := b.BaseCommentService.BuildAvatarURL(ctx, comment.GravatarMd5, nil, nil)
 	if err != nil {
@@ -116,7 +117,7 @@ func (b *baseCommentAssembler) ConvertToDTOList(ctx context.Context, comments []
 			ID:                comment.ID,
 			Author:            comment.Author,
 			Email:             comment.Email,
-			IpAddress:         comment.IPAddress,
+			IPAddress:         comment.IPAddress,
 			AuthorURL:         comment.AuthorURL,
 			GravatarMD5:       comment.GravatarMd5,
 			Content:           comment.Content,
@@ -126,6 +127,7 @@ func (b *baseCommentAssembler) ConvertToDTOList(ctx context.Context, comments []
 			IsAdmin:           comment.IsAdmin,
 			AllowNotification: comment.AllowNotification,
 			CreateTime:        comment.CreateTime.UnixMilli(),
+			Likes:             comment.Likes,
 		}
 		avatarURL, err := b.BaseCommentService.BuildAvatarURL(ctx, comment.GravatarMd5, util.StringPtr(gravatarSource.(string)), util.StringPtr(gravatarDefault.(string)))
 		if err != nil {

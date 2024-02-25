@@ -3,7 +3,6 @@ package listener
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -37,7 +36,6 @@ func (s *StartListener) HandleEvent(ctx context.Context, startEvent event.Event)
 	if _, ok := startEvent.(*event.StartEvent); !ok {
 		return nil
 	}
-	consts.StartTime = time.Now()
 
 	err := s.createOptions()
 	if err != nil {
@@ -88,7 +86,12 @@ func (s *StartListener) printStartInfo(ctx context.Context) error {
 	site := logger.BlueBold + "Sonic started at         " + blogURL + logger.Reset
 	log.Info(site)
 	fmt.Println(site)
-	adminSite := logger.BlueBold + "Sonic admin started at         " + blogURL + "/admin" + logger.Reset
+
+	adminURLPath, err := s.optionService.GetAdminURLPath(ctx)
+	if err != nil {
+		return err
+	}
+	adminSite := logger.BlueBold + "Sonic admin started at         " + blogURL + "/" + adminURLPath + logger.Reset
 	log.Info(adminSite)
 	fmt.Println(adminSite)
 	return nil

@@ -75,17 +75,17 @@ func (p *PostAuthentication) Authenticate(ctx context.Context, token string, id 
 			if !ok || parentCategory == nil {
 				break
 			}
-			if parentCategory.Password == "" {
+			switch parentCategory.Password {
+			case "":
 				parentID = parentCategory.ParentID
-			} else if parentCategory.Password == password {
+			case password:
 				return p.doAuthenticate(ctx, token, id)
-			} else {
+			default:
 				break
 			}
 		}
 	}
 	return "", xerr.WithMsg(nil, "密码不正确").WithStatus(http.StatusUnauthorized)
-
 }
 
 func (p *PostAuthentication) IsAuthenticated(ctx context.Context, tokenStr string, id int32) (bool, error) {
@@ -108,7 +108,7 @@ func (p *PostAuthentication) IsAuthenticated(ctx context.Context, tokenStr strin
 
 	token, err := jwt.ParseWithClaims(tokenStr, &customClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(secret.(string)), nil
 	})
@@ -161,7 +161,7 @@ func (p *PostAuthentication) doAuthenticate(ctx context.Context, tokenStr string
 	if tokenStr != "" {
 		token, err := jwt.ParseWithClaims(tokenStr, &customClaims{}, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
 			return []byte(secret.(string)), nil
 		})

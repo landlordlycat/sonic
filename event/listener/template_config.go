@@ -51,10 +51,15 @@ func NewTemplateConfigListener(bus event.Bus,
 	bus.Subscribe(event.OptionUpdateEventName, t.HandleOptionUpdateEvent)
 	bus.Subscribe(event.StartEventName, t.HandleStartEvent)
 	bus.Subscribe(event.ThemeActivatedEventName, t.HandleThemeUpdateEvent)
+	bus.Subscribe(event.ThemeFileUpdatedEventName, t.HandleThemeFileUpdateEvent)
 }
 
 func (t *TemplateConfigListener) HandleThemeUpdateEvent(ctx context.Context, themeUpdateEvent event.Event) error {
-	return t.loadThemeConfig(ctx)
+	err := t.loadThemeConfig(ctx)
+	if err != nil {
+		return err
+	}
+	return t.loadThemeTemplate(ctx)
 }
 
 func (t *TemplateConfigListener) HandleUserUpdateEvent(ctx context.Context, userUpdateEvent event.Event) error {
@@ -62,6 +67,10 @@ func (t *TemplateConfigListener) HandleUserUpdateEvent(ctx context.Context, user
 }
 
 func (t *TemplateConfigListener) HandleOptionUpdateEvent(ctx context.Context, optionUpdateEvent event.Event) error {
+	err := t.loadThemeConfig(ctx)
+	if err != nil {
+		return err
+	}
 	return t.loadOption(ctx)
 }
 
@@ -81,12 +90,7 @@ func (t *TemplateConfigListener) HandleStartEvent(ctx context.Context, startEven
 	if err != nil {
 		return err
 	}
-	err = t.loadThemeTemplate(ctx)
-	if err != nil {
-		return err
-	}
-	err = t.registerTemplateStaticFileRoute(ctx)
-	return err
+	return t.loadThemeTemplate(ctx)
 }
 
 func (t *TemplateConfigListener) HandleThemeFileUpdateEvent(ctx context.Context, themeFileUpdateEvent event.Event) error {
@@ -115,7 +119,7 @@ func (t *TemplateConfigListener) loadThemeConfig(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	themeBasePath := ""
+	var themeBasePath string
 	if isEnabledAbsolutePath {
 		themeBasePath = blogBaseURL + "/themes/" + theme.FolderName
 	} else {
@@ -159,7 +163,7 @@ func (t *TemplateConfigListener) loadOption(ctx context.Context) error {
 	for _, option := range options {
 		optionMap[option.Key] = option.Value
 	}
-	blogBaseURL := t.OptionService.GetOrByDefault(ctx, property.BlogUrl)
+	blogBaseURL := t.OptionService.GetOrByDefault(ctx, property.BlogURL)
 	blogTitle := t.OptionService.GetOrByDefault(ctx, property.BlogTitle)
 	blogLogo := t.OptionService.GetOrByDefault(ctx, property.BlogLogo)
 	globalAbsolutePathEnabled := t.OptionService.GetOrByDefault(ctx, property.GlobalAbsolutePathEnabled)
@@ -194,14 +198,5 @@ func (t *TemplateConfigListener) loadOption(ctx context.Context) error {
 	t.Template.SetSharedVariable("archives_url", urlContext+archivePrefix.(string))
 	t.Template.SetSharedVariable("categories_url", urlContext+categoryPrefix.(string))
 	t.Template.SetSharedVariable("tags_url", urlContext+tagPrefix.(string))
-	return nil
-}
-
-func (t *TemplateConfigListener) registerTemplateStaticFileRoute(ctx context.Context) error {
-	theme, err := t.ThemeService.GetActivateTheme(ctx)
-	if err != nil {
-		return nil
-	}
-	t.Router.StaticFS("/themes/"+theme.FolderName, gin.Dir(theme.ThemePath, false))
 	return nil
 }

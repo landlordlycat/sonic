@@ -29,7 +29,12 @@ func TimePtr(t time.Time) *time.Time {
 func BoolPtr(b bool) *bool {
 	return &b
 }
+
 func Int32Ptr(i int32) *int32 {
+	return &i
+}
+
+func Int64Ptr(i int64) *int64 {
 	return &i
 }
 
@@ -43,7 +48,7 @@ func Md5Hex(str string) string {
 }
 
 func MapKeyToArray[K comparable, V any](m map[K]V) []K {
-	var values []K
+	values := make([]K, 0, len(m))
 
 	for k := range m {
 		values = append(values, k)

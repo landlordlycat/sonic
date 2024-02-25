@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	uuid2 "github.com/google/uuid"
@@ -75,7 +74,7 @@ func (a *adminServiceImpl) Authenticate(ctx context.Context, loginParam param.Lo
 	}
 
 	if !a.UserService.PasswordMatch(ctx, user.Password, loginParam.Password) {
-		return nil, xerr.BadParam.New(missMatchTip).WithStatus(xerr.StatusBadRequest)
+		return nil, xerr.BadParam.New("").WithMsg(missMatchTip).WithStatus(xerr.StatusBadRequest)
 	}
 	return user, nil
 }
@@ -85,7 +84,7 @@ func (a *adminServiceImpl) Auth(ctx context.Context, loginParam param.LoginParam
 	if err != nil {
 		return nil, err
 	}
-	if a.TwoFactorTOTPMFA.UseMFA(consts.MFAType(user.MfaType)) {
+	if a.TwoFactorTOTPMFA.UseMFA(user.MfaType) {
 		if len(loginParam.AuthCode) != 6 {
 			return nil, xerr.WithMsg(nil, "请输入6位两步验证码").WithStatus(xerr.StatusBadRequest)
 		}
@@ -98,7 +97,7 @@ func (a *adminServiceImpl) Auth(ctx context.Context, loginParam param.LoginParam
 		LogKey:    user.Username,
 		LogType:   consts.LogTypeLoggedIn,
 		Content:   user.Nickname,
-		IpAddress: util.GetClientIP(ctx),
+		IPAddress: util.GetClientIP(ctx),
 	})
 	return a.buildAuthToken(user), nil
 }
@@ -120,7 +119,7 @@ func (a *adminServiceImpl) ClearToken(ctx context.Context) error {
 		LogKey:    user.Username,
 		LogType:   consts.LogTypeLoggedOut,
 		Content:   user.Nickname,
-		IpAddress: util.GetClientIP(ctx),
+		IPAddress: util.GetClientIP(ctx),
 	})
 	return nil
 }
@@ -184,7 +183,7 @@ func (a *adminServiceImpl) RefreshToken(ctx context.Context, refreshToken string
 func (a *adminServiceImpl) GetEnvironments(ctx context.Context) *dto.EnvironmentDTO {
 	environments := &dto.EnvironmentDTO{
 		Database:  string(dal.DBType) + " " + consts.DatabaseVersion,
-		Version:   runtime.Version(),
+		Version:   consts.SonicVersion,
 		StartTime: consts.StartTime.UnixMilli(),
 		Mode:      util.IfElse(a.Config.Sonic.Mode == "", "production", a.Config.Sonic.Mode).(string),
 	}
@@ -226,7 +225,6 @@ func (a *adminServiceImpl) GetLogFiles(ctx context.Context, lineNum int64) (stri
 
 	for position > 0 {
 		if !globalIsPrefix {
-
 			position--
 
 			_, err = file.Seek(position, 0)
@@ -264,7 +262,6 @@ func (a *adminServiceImpl) GetLogFiles(ctx context.Context, lineNum int64) (stri
 		if linesCount == lineNum {
 			break
 		}
-
 	}
 	result := bytes.Buffer{}
 	result.Grow(linesTotalByteNum)

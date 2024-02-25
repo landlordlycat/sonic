@@ -79,7 +79,6 @@ func (j *JournalHandler) GetJournal(ctx *gin.Context) (interface{}, error) {
 }
 
 func (j *JournalHandler) ListTopComment(ctx *gin.Context) (interface{}, error) {
-
 	journalID, err := util.ParamInt32(ctx, "journalID")
 	if err != nil {
 		return nil, err
@@ -205,7 +204,13 @@ func (j *JournalHandler) CreateComment(ctx *gin.Context) (interface{}, error) {
 	p := param.Comment{}
 	err := ctx.ShouldBindJSON(&p)
 	if err != nil {
-		return nil, err
+		return nil, xerr.WithStatus(err, xerr.StatusBadRequest).WithMsg("Parameter error")
+	}
+	if p.AuthorURL != "" {
+		err = util.Validate.Var(p.AuthorURL, "http_url")
+		if err != nil {
+			return nil, xerr.WithStatus(err, xerr.StatusBadRequest).WithMsg("Parameter error")
+		}
 	}
 	p.Author = template.HTMLEscapeString(p.Author)
 	p.AuthorURL = template.HTMLEscapeString(p.AuthorURL)

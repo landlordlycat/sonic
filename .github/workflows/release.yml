@@ -2,23 +2,7 @@ name: Release
 
 on:
   release:
-    types: [prereleased]
-  push:
-    branches: 
-      - master
-      - v*
-    paths:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
-      - ".github/workflows/*.yml"
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
-      - ".github/workflows/*.yml"
+    types: [published]
 
 jobs:
   build:
@@ -63,26 +47,27 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with: 
           submodules: recursive
 
       - name: Show workflow information
         run: |
           echo "GOOS: $GOOS, GOARCH: $GOARCH"
+          echo "BUILD_TIME=$(date +%FT%T%z)" >> $GITHUB_ENV
 
       - name: Build
-        uses: crazy-max/ghaction-xgo@v2
+        uses: crazy-max/ghaction-xgo@v3
         with:
           xgo_version: latest
-          go_version: 1.19
+          go_version: 1.21
           dest: build
           prefix: sonic
           targets: ${{matrix.goos}}/${{matrix.goarch}}
           v: true
           x: false
           race: false
-          ldflags: -s -w
+          ldflags: -s -w -X 'github.com/go-sonic/sonic/consts.SonicVersion=${{github.ref_name}}' -X 'github.com/go-sonic/sonic/consts.BuildCommit=${{github.sha}}' -X 'github.com/go-sonic/sonic/consts.BuildTime=${{env.BUILD_TIME}}'
           buildmode: default
           trimpath: true
 
@@ -105,7 +90,7 @@ jobs:
 
       - name: Prepare package for Linux
         if: matrix.goos == 'linux'
-        run: cp -rv ./release/systemd ./build/
+        run: cp -rv ./scripts/release/systemd ./build/
 
       - name: Create ZIP archive
         run: |
@@ -120,7 +105,7 @@ jobs:
           openssl dgst -sha512 $FILE | sed 's/([^)]*)//g' >>$DGST
 
       - name: Upload ZIP file to Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sonic-${{matrix.goos}}-${{matrix.goarch}}.zip
           path: sonic-${{matrix.goos}}-${{matrix.goarch}}.zip

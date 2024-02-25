@@ -96,7 +96,7 @@ func (s sheetServiceImpl) ConvertParam(ctx context.Context, sheetParam *param.Sh
 		sheet.EditorType = consts.EditorTypeMarkdown
 	}
 
-	sheet.WordCount = util.HtmlFormatWordCount(sheet.FormatContent)
+	sheet.WordCount = util.HTMLFormatWordCount(sheet.FormatContent)
 	if sheetParam.Slug == "" {
 		sheet.Slug = util.Slug(sheetParam.Title)
 	} else {
@@ -135,7 +135,7 @@ func (s sheetServiceImpl) Update(ctx context.Context, sheetID int32, sheetParam 
 		LogKey:    strconv.Itoa(int(sheet.ID)),
 		LogType:   consts.LogTypeSheetEdited,
 		Content:   sheet.Title,
-		IpAddress: util.GetClientIP(ctx),
+		IPAddress: util.GetClientIP(ctx),
 	})
 	return sheet, nil
 }
@@ -166,7 +166,7 @@ func (s sheetServiceImpl) Preview(ctx context.Context, sheetID int32) (string, e
 	if err != nil {
 		return "", err
 	}
-	previewURL.WriteString("/")
+	previewURL.WriteString("/admin_preview")
 	previewURL.WriteString(fullPath)
 	previewURL.WriteString("?token=")
 	previewURL.WriteString(token)

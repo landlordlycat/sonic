@@ -60,7 +60,8 @@ func (v *ViewHandler) Install(ctx *gin.Context) {
 	if isInstall {
 		return
 	}
-	ctx.Redirect(http.StatusTemporaryRedirect, "admin/#install")
+	adminURLPath, _ := v.OptionService.GetAdminURLPath(ctx)
+	ctx.Redirect(http.StatusTemporaryRedirect, adminURLPath+"/#install")
 }
 
 func (v *ViewHandler) Logo(ctx *gin.Context) (interface{}, error) {
@@ -133,6 +134,7 @@ func (v *ViewHandler) authenticateCategory(ctx *gin.Context, slug, password, tok
 	ctx.Redirect(http.StatusFound, categoryDTO.FullPath)
 	return token, nil
 }
+
 func (v *ViewHandler) authenticatePost(ctx *gin.Context, slug, password, token string) (string, error) {
 	post, err := v.PostService.GetBySlug(ctx, slug)
 	if err != nil {

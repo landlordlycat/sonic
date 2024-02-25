@@ -54,6 +54,12 @@ var MinioAccessSecret = Property{
 	Kind:         reflect.String,
 }
 
+var MinioProtocol = Property{
+	DefaultValue: "https://",
+	KeyValue:     "minio_protocol",
+	Kind:         reflect.String,
+}
+
 var MinioSource = Property{
 	DefaultValue: "",
 	KeyValue:     "minio_source",
@@ -63,6 +69,12 @@ var MinioSource = Property{
 var MinioRegion = Property{
 	DefaultValue: "",
 	KeyValue:     "minio_region",
+	Kind:         reflect.String,
+}
+
+var MinioFrontBase = Property{
+	DefaultValue: "",
+	KeyValue:     "minio_front_base",
 	Kind:         reflect.String,
 }
 
@@ -107,11 +119,13 @@ var AliOssSource = Property{
 	KeyValue:     "oss_ali_source",
 	Kind:         reflect.String,
 }
+
 var AliOssThumbnailStyleRule = Property{
 	DefaultValue: "",
 	KeyValue:     "oss_ali_thumbnail_style_rule",
 	Kind:         reflect.String,
 }
+
 var AliOssStyleRule = Property{
 	DefaultValue: "",
 	KeyValue:     "oss_ali_style_rule",
@@ -220,7 +234,7 @@ var TencentCosBucketName = Property{
 	Kind:         reflect.String,
 }
 
-var TencentCosSecretId = Property{
+var TencentCosSecretID = Property{
 	DefaultValue: "",
 	KeyValue:     "cos_tencent_secret_id",
 	Kind:         reflect.String,

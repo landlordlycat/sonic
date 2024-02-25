@@ -3,7 +3,8 @@ package impl
 import (
 	"context"
 
-	"github.com/go-sonic/sonic/consts"
+	"gorm.io/gorm"
+
 	"github.com/go-sonic/sonic/dal"
 	"github.com/go-sonic/sonic/model/dto"
 	"github.com/go-sonic/sonic/model/entity"
@@ -19,7 +20,7 @@ func NewLogService() service.LogService {
 
 func (l *logServiceImpl) Clear(ctx context.Context) error {
 	logDAL := dal.GetQueryByCtx(ctx).Log
-	_, err := logDAL.WithContext(ctx).Delete()
+	_, err := logDAL.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete()
 	if err != nil {
 		return WrapDBErr(err)
 	}
@@ -45,7 +46,7 @@ func (l *logServiceImpl) ConvertToDTO(log *entity.Log) *dto.Log {
 	return &dto.Log{
 		ID:         log.ID,
 		LogKey:     log.LogKey,
-		LogType:    consts.LogType(log.Type),
+		LogType:    log.Type,
 		Content:    log.Content,
 		IPAddress:  log.IPAddress,
 		CreateTime: log.CreateTime.UnixMilli(),

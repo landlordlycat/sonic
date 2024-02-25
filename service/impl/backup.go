@@ -3,7 +3,6 @@ package impl
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"io/fs"
 	"mime/multipart"
 	"os"
@@ -15,7 +14,6 @@ import (
 	"github.com/go-sonic/sonic/config"
 	"github.com/go-sonic/sonic/consts"
 	"github.com/go-sonic/sonic/dal"
-	"github.com/go-sonic/sonic/log"
 	"github.com/go-sonic/sonic/model/dto"
 	"github.com/go-sonic/sonic/service"
 	"github.com/go-sonic/sonic/util"
@@ -26,13 +24,15 @@ type backupServiceImpl struct {
 	Config              *config.Config
 	OptionService       service.OptionService
 	OneTimeTokenService service.OneTimeTokenService
+	ExportImportService service.ExportImport
 }
 
-func NewBackUpService(config *config.Config, optionService service.OptionService, oneTimeTokenService service.OneTimeTokenService) service.BackupService {
+func NewBackUpService(config *config.Config, optionService service.OptionService, oneTimeTokenService service.OneTimeTokenService, exportImportService service.ExportImport) service.BackupService {
 	return &backupServiceImpl{
 		Config:              config,
 		OptionService:       optionService,
 		OneTimeTokenService: oneTimeTokenService,
+		ExportImportService: exportImportService,
 	}
 }
 
@@ -46,9 +46,10 @@ func (b *backupServiceImpl) GetBackup(ctx context.Context, filepath string, back
 	return b.buildBackupDTO(ctx, string(backupType), filepath)
 }
 
-func (b *backupServiceImpl) BackupWholeSite(ctx context.Context) (*dto.BackupDTO, error) {
+func (b *backupServiceImpl) BackupWholeSite(ctx context.Context, toBackupItems []string) (*dto.BackupDTO, error) {
 	backupFilename := consts.SonicBackupPrefix + time.Now().Format("2006-01-02-15-04-05") + util.GenUUIDWithOutDash() + ".zip"
 	backupFilePath := config.BackupDir
+
 	if _, err := os.Stat(backupFilePath); os.IsNotExist(err) {
 		err = os.MkdirAll(backupFilePath, os.ModePerm)
 		if err != nil {
@@ -57,17 +58,19 @@ func (b *backupServiceImpl) BackupWholeSite(ctx context.Context) (*dto.BackupDTO
 	} else if err != nil {
 		return nil, xerr.NoType.Wrap(err).WithMsg("get fileInfo")
 	}
+
 	backupFile := filepath.Join(backupFilePath, backupFilename)
 
-	toBackupPath := []string{b.Config.Sonic.WorkDir}
-	if !strings.Contains(b.Config.Sonic.LogDir, b.Config.Sonic.WorkDir) {
-		toBackupPath = append(toBackupPath, b.Config.Sonic.LogDir)
-	}
-	if !strings.Contains(b.Config.Sonic.TemplateDir, b.Config.Sonic.WorkDir) {
-		toBackupPath = append(toBackupPath, b.Config.Sonic.TemplateDir)
+	toBackupPaths := []string{}
+	for _, toBackupItem := range toBackupItems {
+		toBackupPath := filepath.Clean(filepath.Join(b.Config.Sonic.WorkDir, toBackupItem))
+		if !strings.HasPrefix(toBackupPath, b.Config.Sonic.WorkDir) {
+			continue
+		}
+		toBackupPaths = append(toBackupPaths, toBackupPath)
 	}
 
-	err := util.ZipFile(backupFile, toBackupPath...)
+	err := util.ZipFile(backupFile, toBackupPaths...)
 	if err != nil {
 		return nil, err
 	}
@@ -83,11 +86,12 @@ func (b *backupServiceImpl) ListFiles(ctx context.Context, path string, backupTy
 		return nil, xerr.NoType.Wrap(err).WithMsg("Failed to fetch backups")
 	}
 	prefix := ""
-	if backupType == service.WholeSite {
+	switch backupType {
+	case service.WholeSite:
 		prefix = consts.SonicBackupPrefix
-	} else if backupType == service.JsonData {
+	case service.JSONData:
 		prefix = consts.SonicDataExportPrefix
-	} else if backupType == service.Markdown {
+	case service.Markdown:
 		prefix = consts.SonicBackupMarkdownPrefix
 	}
 	err := filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
@@ -141,14 +145,8 @@ func (b *backupServiceImpl) ImportMarkdown(ctx context.Context, fileHeader *mult
 	if err != nil {
 		return xerr.NoType.Wrap(err).WithMsg("upload file error")
 	}
-	bContent, err := io.ReadAll(file)
-	if err != nil {
-		return xerr.NoType.Wrap(err).WithMsg("read file error")
-	}
-	content := string(bContent)
-	log.Info(content)
-	// TODO 导入markdown
-	return nil
+	_, err = b.ExportImportService.CreateByMarkdown(ctx, fileHeader.Filename, file)
+	return err
 }
 
 func (b *backupServiceImpl) ExportData(ctx context.Context) (*dto.BackupDTO, error) {
@@ -201,12 +199,15 @@ func (b *backupServiceImpl) ExportData(ctx context.Context) (*dto.BackupDTO, err
 	if err != nil {
 		return nil, xerr.NoType.Wrap(err).WithMsg("write to file err")
 	}
-	return b.buildBackupDTO(ctx, string(service.JsonData), filepath.Join(backupFilePath, backupFilename))
+	return b.buildBackupDTO(ctx, string(service.JSONData), filepath.Join(backupFilePath, backupFilename))
 }
 
 func (b *backupServiceImpl) ExportMarkdown(ctx context.Context, needFrontMatter bool) (*dto.BackupDTO, error) {
-	// TODO
-	return nil, nil
+	fileName, err := b.ExportImportService.ExportMarkdown(ctx, needFrontMatter)
+	if err != nil {
+		return nil, err
+	}
+	return b.buildBackupDTO(ctx, string(service.Markdown), fileName)
 }
 
 func (b *backupServiceImpl) buildBackupDTO(ctx context.Context, baseBackupURL string, backupFilePath string) (*dto.BackupDTO, error) {
@@ -255,4 +256,17 @@ func fillData(dataMap map[string]interface{}, item string, f interface{}, preErr
 		dataMap[item] = data.Interface()
 	}
 	return nil
+}
+
+func (b *backupServiceImpl) ListToBackupItems(ctx context.Context) ([]string, error) {
+	dirEntrys, err := os.ReadDir(b.Config.Sonic.WorkDir)
+	if err != nil {
+		return nil, xerr.WithStatus(err, xerr.StatusInternalServerError).WithMsg("read work dir err")
+	}
+
+	result := make([]string, 0)
+	for _, dirEntry := range dirEntrys {
+		result = append(result, dirEntry.Name())
+	}
+	return result, nil
 }

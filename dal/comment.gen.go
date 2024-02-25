@@ -42,6 +42,7 @@ func newComment(db *gorm.DB, opts ...gen.DOOption) comment {
 	_comment.Status = field.NewField(tableName, "status")
 	_comment.TopPriority = field.NewInt32(tableName, "top_priority")
 	_comment.UserAgent = field.NewString(tableName, "user_agent")
+	_comment.Likes = field.NewInt32(tableName, "likes")
 
 	_comment.fillFieldMap()
 
@@ -69,6 +70,7 @@ type comment struct {
 	Status            field.Field
 	TopPriority       field.Int32
 	UserAgent         field.String
+	Likes             field.Int32
 
 	fieldMap map[string]field.Expr
 }
@@ -102,6 +104,7 @@ func (c *comment) updateTableName(table string) *comment {
 	c.Status = field.NewField(table, "status")
 	c.TopPriority = field.NewInt32(table, "top_priority")
 	c.UserAgent = field.NewString(table, "user_agent")
+	c.Likes = field.NewInt32(table, "likes")
 
 	c.fillFieldMap()
 
@@ -113,6 +116,8 @@ func (c *comment) WithContext(ctx context.Context) *commentDo { return c.comment
 func (c comment) TableName() string { return c.commentDo.TableName() }
 
 func (c comment) Alias() string { return c.commentDo.Alias() }
+
+func (c comment) Columns(cols ...field.Expr) gen.Columns { return c.commentDo.Columns(cols...) }
 
 func (c *comment) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 	_f, ok := c.fieldMap[fieldName]
@@ -142,6 +147,7 @@ func (c *comment) fillFieldMap() {
 	c.fieldMap["status"] = c.Status
 	c.fieldMap["top_priority"] = c.TopPriority
 	c.fieldMap["user_agent"] = c.UserAgent
+	c.fieldMap["likes"] = c.Likes
 }
 
 func (c comment) clone(db *gorm.DB) comment {
@@ -198,10 +204,6 @@ func (c commentDo) Select(conds ...field.Expr) *commentDo {
 
 func (c commentDo) Where(conds ...gen.Condition) *commentDo {
 	return c.withDO(c.DO.Where(conds...))
-}
-
-func (c commentDo) Exists(subquery interface{ UnderlyingDB() *gorm.DB }) *commentDo {
-	return c.Where(field.CompareSubQuery(field.ExistsOp, nil, subquery.UnderlyingDB()))
 }
 
 func (c commentDo) Order(conds ...field.Expr) *commentDo {

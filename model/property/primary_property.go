@@ -14,13 +14,13 @@ var (
 	}
 	Theme = Property{
 		KeyValue:     "theme",
-		DefaultValue: consts.DefaultThemeId,
+		DefaultValue: consts.DefaultThemeID,
 		Kind:         reflect.String,
 	}
 	BirthDay = Property{
 		KeyValue:     "birthday",
-		DefaultValue: int(0),
-		Kind:         reflect.Int,
+		DefaultValue: int64(0),
+		Kind:         reflect.Int64,
 	}
 	DefaultMenuTeam = Property{
 		KeyValue:     "default_menu_team",

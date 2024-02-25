@@ -2,7 +2,6 @@ package extension
 
 import (
 	"math/rand"
-	"time"
 
 	"github.com/go-sonic/sonic/template"
 	"github.com/go-sonic/sonic/util"
@@ -22,14 +21,10 @@ func RegisterToolFunc(template *template.Template) {
 
 // addRainbow 彩虹分页算法
 func (t *toolExtension) addRainbow() {
-	rainbowPage := func(page, total, display int) []int {
-		return util.RainbowPage(page, total, display)
-	}
-	t.Template.AddFunc("rainbowPage", rainbowPage)
+	t.Template.AddFunc("rainbowPage", util.RainbowPage)
 }
 
 func (t *toolExtension) addRandom() {
-	rand.Seed(time.Now().UnixNano())
 	random := func(min, max int) int {
 		return min + rand.Intn(max-min)
 	}

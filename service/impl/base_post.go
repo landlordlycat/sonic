@@ -114,11 +114,11 @@ func (b basePostServiceImpl) buildPostFullPath(ctx context.Context, post *entity
 		return "", err
 	}
 	if isEnabled {
-		blogBaseUrl, err := b.OptionService.GetBlogBaseURL(ctx)
+		blogBaseURL, err := b.OptionService.GetBlogBaseURL(ctx)
 		if err != nil {
 			return "", err
 		}
-		fullPath.WriteString(blogBaseUrl)
+		fullPath.WriteString(blogBaseURL)
 	}
 	fullPath.WriteString("/")
 	switch consts.PostPermalinkType(postPermaLinkType.(string)) {
@@ -180,11 +180,11 @@ func (b basePostServiceImpl) buildSheetFullPath(ctx context.Context, sheet *enti
 		return "", err
 	}
 	if isEnabled {
-		blogBaseUrl, err := b.OptionService.GetBlogBaseURL(ctx)
+		blogBaseURL, err := b.OptionService.GetBlogBaseURL(ctx)
 		if err != nil {
 			return "", err
 		}
-		fullPath.WriteString(blogBaseUrl)
+		fullPath.WriteString(blogBaseURL)
 	}
 	fullPath.WriteString("/")
 	switch consts.SheetPermaLinkType(sheetPermaLinkType.(string)) {
@@ -212,7 +212,7 @@ func (b basePostServiceImpl) GetByPostID(ctx context.Context, postID int32) (*en
 var summaryPattern = regexp.MustCompile(`[\t\r\n]`)
 
 func (b basePostServiceImpl) GenerateSummary(ctx context.Context, htmlContent string) string {
-	text := util.CleanHtmlTag(htmlContent)
+	text := util.CleanHTMLTag(htmlContent)
 	text = summaryPattern.ReplaceAllString(text, "")
 	summaryLength := b.OptionService.GetPostSummaryLength(ctx)
 	end := summaryLength
@@ -347,7 +347,6 @@ func (b basePostServiceImpl) CreateOrUpdate(ctx context.Context, post *entity.Po
 				}
 				post.Status = status
 			}
-
 		} else {
 			// update post
 			slugCount, err := postDAL.WithContext(ctx).Where(postDAL.Slug.Eq(post.Slug), postDAL.ID.Neq(post.ID)).Count()
@@ -487,14 +486,14 @@ func (b basePostServiceImpl) UpdateStatusBatch(ctx context.Context, status const
 	return posts, nil
 }
 
-func (b basePostServiceImpl) UpdateDraftContent(ctx context.Context, postID int32, content string) (*entity.Post, error) {
+func (b basePostServiceImpl) UpdateDraftContent(ctx context.Context, postID int32, content, originalContent string) (*entity.Post, error) {
 	postDAL := dal.GetQueryByCtx(ctx).Post
 	post, err := postDAL.WithContext(ctx).Where(postDAL.ID.Eq(postID)).First()
 	if err != nil {
 		return nil, WrapDBErr(err)
 	}
 	if post.OriginalContent != content {
-		updateResult, err := postDAL.WithContext(ctx).Where(postDAL.ID.Eq(postID)).UpdateColumnSimple(postDAL.OriginalContent.Value(content))
+		updateResult, err := postDAL.WithContext(ctx).Where(postDAL.ID.Eq(postID)).UpdateColumnSimple(postDAL.OriginalContent.Value(originalContent), postDAL.FormatContent.Value(content))
 		if err != nil {
 			return nil, WrapDBErr(err)
 		}

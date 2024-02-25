@@ -1,6 +1,8 @@
 package admin
 
 import (
+	"errors"
+
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 
@@ -139,7 +141,8 @@ func (p *PostCommentHandler) CreatePostComment(ctx *gin.Context) (interface{}, e
 	var commentParam *param.AdminComment
 	err := ctx.ShouldBindJSON(&commentParam)
 	if err != nil {
-		if e, ok := err.(validator.ValidationErrors); ok {
+		e := validator.ValidationErrors{}
+		if errors.As(err, &e) {
 			return nil, xerr.WithStatus(e, xerr.StatusBadRequest).WithMsg(trans.Translate(e))
 		}
 		return nil, xerr.WithStatus(err, xerr.StatusBadRequest).WithMsg("parameter error")
@@ -177,7 +180,8 @@ func (p *PostCommentHandler) UpdatePostComment(ctx *gin.Context) (interface{}, e
 	var commentParam *param.Comment
 	err = ctx.ShouldBindJSON(&commentParam)
 	if err != nil {
-		if e, ok := err.(validator.ValidationErrors); ok {
+		e := validator.ValidationErrors{}
+		if errors.As(err, &e) {
 			return nil, xerr.WithStatus(e, xerr.StatusBadRequest).WithMsg(trans.Translate(e))
 		}
 		return nil, xerr.WithStatus(err, xerr.StatusBadRequest).WithMsg("parameter error")
@@ -213,7 +217,11 @@ func (p *PostCommentHandler) UpdatePostCommentStatus(ctx *gin.Context) (interfac
 }
 
 func (p *PostCommentHandler) UpdatePostCommentStatusBatch(ctx *gin.Context) (interface{}, error) {
-	status, err := util.ParamInt32(ctx, "status")
+	strStatus, err := util.ParamString(ctx, "status")
+	if err != nil {
+		return nil, err
+	}
+	status, err := consts.CommentStatusFromString(strStatus)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +231,7 @@ func (p *PostCommentHandler) UpdatePostCommentStatusBatch(ctx *gin.Context) (int
 	if err != nil {
 		return nil, xerr.WithStatus(err, xerr.StatusBadRequest).WithMsg("post ids error")
 	}
-	comments, err := p.PostCommentService.UpdateStatusBatch(ctx, ids, consts.CommentStatus(status))
+	comments, err := p.PostCommentService.UpdateStatusBatch(ctx, ids, status)
 	if err != nil {
 		return nil, err
 	}

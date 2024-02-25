@@ -2,7 +2,7 @@ package impl
 
 import (
 	"github.com/go-sonic/sonic/injection"
-	"github.com/go-sonic/sonic/service/file_storage"
+	"github.com/go-sonic/sonic/service/storage"
 )
 
 func init() {
@@ -38,6 +38,7 @@ func init() {
 		NewTagService,
 		NewThemeService,
 		NewUserService,
-		file_storage.NewFileStorageComposite,
+		NewExportImport,
+		storage.NewFileStorageComposite,
 	)
 }

@@ -30,6 +30,8 @@ func NewConfig() *Config {
 		viper.SetConfigName("config")
 	}
 
+	viper.SetDefault("sonic.admin_url_path", "admin")
+
 	conf := &Config{}
 	if err := viper.ReadInConfig(); err != nil {
 		panic(err)
@@ -82,6 +84,7 @@ func NewConfig() *Config {
 
 	initDirectory(conf)
 	mode = conf.Sonic.Mode
+	logMode = conf.Sonic.LogMode
 	return conf
 }
 
@@ -97,12 +100,26 @@ func initDirectory(conf *Config) {
 	err := mkdirFunc(conf.Sonic.LogDir, nil)
 	err = mkdirFunc(conf.Sonic.UploadDir, err)
 	if err != nil {
-		panic(fmt.Errorf("initDirectory err=%v", err))
+		panic(fmt.Errorf("initDirectory err=%w", err))
 	}
 }
 
-var mode string
+var (
+	mode    string
+	logMode LogMode
+)
 
 func IsDev() bool {
 	return mode == "development"
+}
+
+func LogToConsole() bool {
+	switch logMode {
+	case Console:
+		return true
+	case File:
+		return false
+	default:
+		return IsDev()
+	}
 }

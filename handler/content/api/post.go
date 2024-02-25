@@ -163,7 +163,13 @@ func (p *PostHandler) CreateComment(ctx *gin.Context) (interface{}, error) {
 	comment := param.Comment{}
 	err := ctx.ShouldBindJSON(&comment)
 	if err != nil {
-		return nil, err
+		return nil, xerr.WithStatus(err, xerr.StatusBadRequest).WithMsg("Parameter error")
+	}
+	if comment.AuthorURL != "" {
+		err = util.Validate.Var(comment.AuthorURL, "http_url")
+		if err != nil {
+			return nil, xerr.WithStatus(err, xerr.StatusBadRequest).WithMsg("Parameter error")
+		}
 	}
 	comment.Author = template.HTMLEscapeString(comment.Author)
 	comment.AuthorURL = template.HTMLEscapeString(comment.AuthorURL)
@@ -182,9 +188,5 @@ func (p *PostHandler) Like(ctx *gin.Context) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = p.PostService.IncreaseLike(ctx, postID)
-	if err != nil {
-		return nil, err
-	}
-	return nil, err
+	return nil, p.PostService.IncreaseLike(ctx, postID)
 }

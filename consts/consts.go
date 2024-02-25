@@ -19,7 +19,6 @@ const (
 )
 
 const (
-	SonicVersion              = "1.0.0"
 	SonicBackupPrefix         = "sonic-backup-"
 	SonicDataExportPrefix     = "sonic-data-export-"
 	SonicBackupMarkdownPrefix = "sonic-backup-markdown-"
@@ -34,13 +33,16 @@ var (
 )
 
 const (
-	DefaultThemeId         = "caicai_anatole"
+	DefaultThemeID         = "caicai_anatole"
 	ThemeScreenshotsName   = "screenshot"
 	ThemeCustomSheetPrefix = "sheet_"
 	ThemeCustomPostPrefix  = "post_"
 )
 
-// StartTime 系统启动时间
-var StartTime time.Time
-
-var DatabaseVersion string
+var (
+	StartTime       time.Time = time.Now()
+	DatabaseVersion string
+	SonicVersion    = "v1.0.0"
+	BuildTime       string
+	BuildCommit     string
+)

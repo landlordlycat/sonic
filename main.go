@@ -10,7 +10,6 @@ import (
 	"github.com/go-sonic/sonic/dal"
 	"github.com/go-sonic/sonic/event"
 	"github.com/go-sonic/sonic/event/listener"
-	_ "github.com/go-sonic/sonic/event/listener"
 	"github.com/go-sonic/sonic/handler"
 	"github.com/go-sonic/sonic/handler/middleware"
 	"github.com/go-sonic/sonic/injection"
@@ -66,6 +65,7 @@ func InitApp() *fx.App {
 			extension.RegisterToolFunc,
 			extension.RegisterPaginationFunc,
 			extension.RegisterPostFunc,
+			extension.RegisterStatisticFunc,
 			func(s *handler.Server) {
 				s.RegisterRouters()
 			},

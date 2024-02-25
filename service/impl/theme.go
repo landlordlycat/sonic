@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/fx"
+
 	"github.com/go-sonic/sonic/config"
 	"github.com/go-sonic/sonic/dal"
 	"github.com/go-sonic/sonic/event"
@@ -22,27 +24,33 @@ import (
 )
 
 type themeServiceImpl struct {
-	OptionService            service.OptionService
-	Config                   *config.Config
-	Event                    event.Bus
-	PropertyScanner          theme.PropertyScanner
-	FileScanner              theme.FileScanner
-	MultipartZipThemeFetcher theme.MultipartZipThemeFetcher
+	OptionService   service.OptionService
+	Config          *config.Config
+	Event           event.Bus
+	PropertyScanner theme.PropertyScanner
+	FileScanner     theme.FileScanner
+	ThemeFetchers   themeFetchers
 }
 
-func NewThemeService(optionService service.OptionService, config *config.Config, event event.Bus, propertyScanner theme.PropertyScanner, fileScanner theme.FileScanner, multipartZipThemeFetcher theme.MultipartZipThemeFetcher) service.ThemeService {
+type themeFetchers struct {
+	fx.In
+	MultipartZipThemeFetcher theme.ThemeFetcher `name:"multipartZipThemeFetcher"`
+	GitRepoThemeFetcher      theme.ThemeFetcher `name:"gitRepoThemeFetcher"`
+}
+
+func NewThemeService(optionService service.OptionService, config *config.Config, event event.Bus, propertyScanner theme.PropertyScanner, fileScanner theme.FileScanner, themeFetcher themeFetchers) service.ThemeService {
 	return &themeServiceImpl{
-		OptionService:            optionService,
-		Config:                   config,
-		Event:                    event,
-		PropertyScanner:          propertyScanner,
-		FileScanner:              fileScanner,
-		MultipartZipThemeFetcher: multipartZipThemeFetcher,
+		OptionService:   optionService,
+		Config:          config,
+		Event:           event,
+		PropertyScanner: propertyScanner,
+		FileScanner:     fileScanner,
+		ThemeFetchers:   themeFetcher,
 	}
 }
 
 func (t *themeServiceImpl) GetActivateTheme(ctx context.Context) (*dto.ThemeProperty, error) {
-	activatedThemeID, err := t.OptionService.GetActivatedThemeId(ctx)
+	activatedThemeID, err := t.OptionService.GetActivatedThemeID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +65,7 @@ func (t *themeServiceImpl) GetThemeByID(ctx context.Context, themeID string) (*d
 	if themeProperty == nil {
 		return nil, xerr.WithStatus(nil, xerr.StatusBadRequest).WithMsg(themeID + " not exist")
 	}
-	activatedThemeID, err := t.OptionService.GetActivatedThemeId(ctx)
+	activatedThemeID, err := t.OptionService.GetActivatedThemeID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +80,7 @@ func (t *themeServiceImpl) ListAllTheme(ctx context.Context) ([]*dto.ThemeProper
 	if err != nil {
 		return nil, err
 	}
-	activatedThemeID, err := t.OptionService.GetActivatedThemeId(ctx)
+	activatedThemeID, err := t.OptionService.GetActivatedThemeID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +165,6 @@ func (t *themeServiceImpl) UpdateThemeFile(ctx context.Context, themeID, absPath
 	if err != nil {
 		return xerr.WithMsg(err, "write to file err")
 	}
-	t.Event.Publish(ctx, &event.ThemeFileUpdatedEvent{})
 	return nil
 }
 
@@ -352,7 +359,7 @@ func (t *themeServiceImpl) SaveThemeSettings(ctx context.Context, themeID string
 }
 
 func (t *themeServiceImpl) DeleteThemeSettings(ctx context.Context, themeID string) error {
-	activatedThemeID, err := t.OptionService.GetActivatedThemeId(ctx)
+	activatedThemeID, err := t.OptionService.GetActivatedThemeID(ctx)
 	if err != nil {
 		return err
 	}
@@ -366,7 +373,7 @@ func (t *themeServiceImpl) DeleteThemeSettings(ctx context.Context, themeID stri
 }
 
 func (t *themeServiceImpl) DeleteTheme(ctx context.Context, themeID string, deleteSettings bool) error {
-	activatedThemeID, err := t.OptionService.GetActivatedThemeId(ctx)
+	activatedThemeID, err := t.OptionService.GetActivatedThemeID(ctx)
 	if err != nil {
 		return err
 	}
@@ -391,7 +398,7 @@ func (t *themeServiceImpl) DeleteTheme(ctx context.Context, themeID string, dele
 }
 
 func (t *themeServiceImpl) UploadTheme(ctx context.Context, file *multipart.FileHeader) (*dto.ThemeProperty, error) {
-	themeProperty, err := t.MultipartZipThemeFetcher.FetchTheme(ctx, file)
+	themeProperty, err := t.ThemeFetchers.MultipartZipThemeFetcher.FetchTheme(ctx, file)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +410,7 @@ func (t *themeServiceImpl) UpdateThemeByUpload(ctx context.Context, themeID stri
 	if err != nil {
 		return nil, err
 	}
-	newThemeProperty, err := t.MultipartZipThemeFetcher.FetchTheme(ctx, file)
+	newThemeProperty, err := t.ThemeFetchers.MultipartZipThemeFetcher.FetchTheme(ctx, file)
 	if err != nil {
 		return nil, err
 	}
@@ -421,7 +428,7 @@ func (t *themeServiceImpl) ReloadTheme(ctx context.Context) error {
 }
 
 func (t *themeServiceImpl) TemplateExist(ctx context.Context, template string) (bool, error) {
-	activatedThemeID, err := t.OptionService.GetActivatedThemeId(ctx)
+	activatedThemeID, err := t.OptionService.GetActivatedThemeID(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -463,9 +470,17 @@ func (t *themeServiceImpl) addTheme(ctx context.Context, themeProperty *dto.Them
 }
 
 func (t *themeServiceImpl) Render(ctx context.Context, name string) (string, error) {
-	activatedThemeID, err := t.OptionService.GetActivatedThemeId(ctx)
+	activatedThemeID, err := t.OptionService.GetActivatedThemeID(ctx)
 	if err != nil {
 		return "", err
 	}
 	return activatedThemeID + "/" + name, nil
+}
+
+func (t *themeServiceImpl) Fetch(ctx context.Context, themeURL string) (*dto.ThemeProperty, error) {
+	fetchTheme, err := t.ThemeFetchers.GitRepoThemeFetcher.FetchTheme(ctx, themeURL)
+	if err != nil {
+		return nil, xerr.WithStatus(err, xerr.StatusBadRequest).WithMsg(err.Error())
+	}
+	return t.addTheme(ctx, fetchTheme)
 }

@@ -35,10 +35,11 @@ func RegisterPostFunc(template *template.Template, postService service.PostServi
 	p.addGetPostCount()
 	p.addGetPostArchiveYear()
 	p.addGetPostArchiveMonth()
-	p.addListPostByCategoryId()
+	p.addListPostByCategoryID()
 	p.addListPostByCategorySlug()
 	p.addListPostByTagID()
 	p.addListPostByTagSlug()
+	p.addListMostPopularPost()
 }
 
 func (p *postExtension) addListLatestPost() {
@@ -60,6 +61,27 @@ func (p *postExtension) addListLatestPost() {
 		return p.PostAssembler.ConvertToListVO(ctx, posts)
 	}
 	p.Template.AddFunc("listLatestPost", listLatestPostFunc)
+}
+
+func (p *postExtension) addListMostPopularPost() {
+	listMostPopularPost := func(top int) ([]*vo.Post, error) {
+		ctx := context.Background()
+		posts, _, err := p.PostService.Page(ctx, param.PostQuery{
+			Page: param.Page{
+				PageNum:  0,
+				PageSize: top,
+			},
+			Sort: &param.Sort{
+				Fields: []string{"visits,desc"},
+			},
+			Statuses: []*consts.PostStatus{consts.PostStatusPublished.Ptr()},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return p.PostAssembler.ConvertToListVO(ctx, posts)
+	}
+	p.Template.AddFunc("listMostPopularPost", listMostPopularPost)
 }
 
 func (p *postExtension) addGetPostCount() {
@@ -91,11 +113,11 @@ func (p *postExtension) addGetPostArchiveMonth() {
 		}
 		return p.PostAssembler.ConvertTOArchiveMonthVOs(ctx, posts)
 	}
-	p.Template.AddFunc("listYearArchives", getPostArchiveMonthFunc)
+	p.Template.AddFunc("listMonthArchives", getPostArchiveMonthFunc)
 }
 
-func (p *postExtension) addListPostByCategoryId() {
-	listPostByCategoryId := func(categoryID int32) ([]*vo.Post, error) {
+func (p *postExtension) addListPostByCategoryID() {
+	listPostByCategoryID := func(categoryID int32) ([]*vo.Post, error) {
 		ctx := context.Background()
 		posts, err := p.PostCategoryService.ListByCategoryID(ctx, categoryID, consts.PostStatusPublished)
 		if err != nil {
@@ -103,7 +125,7 @@ func (p *postExtension) addListPostByCategoryId() {
 		}
 		return p.PostAssembler.ConvertToListVO(ctx, posts)
 	}
-	p.Template.AddFunc("listPostByCategoryID", listPostByCategoryId)
+	p.Template.AddFunc("listPostByCategoryID", listPostByCategoryID)
 }
 
 func (p *postExtension) addListPostByCategorySlug() {

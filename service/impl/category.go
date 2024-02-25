@@ -41,6 +41,12 @@ func (c categoryServiceImpl) GetBySlug(ctx context.Context, slug string) (*entit
 	return category, WrapDBErr(err)
 }
 
+func (c categoryServiceImpl) GetByName(ctx context.Context, name string) (*entity.Category, error) {
+	categoryDAL := dal.GetQueryByCtx(ctx).Category
+	category, err := categoryDAL.WithContext(ctx).Where(categoryDAL.Name.Eq(name)).Take()
+	return category, WrapDBErr(err)
+}
+
 func (c categoryServiceImpl) ListCategoryWithPostCountDTO(ctx context.Context, sort *param.Sort) ([]*dto.CategoryWithPostCount, error) {
 	categoryDAL := dal.GetQueryByCtx(ctx).Category
 	categoryDO := categoryDAL.WithContext(ctx)
@@ -146,11 +152,11 @@ func (c categoryServiceImpl) ConvertToCategoryDTO(ctx context.Context, e *entity
 	}
 	fullPath := strings.Builder{}
 	if isEnabled {
-		blogBaseUrl, err := c.OptionService.GetBlogBaseURL(ctx)
+		blogBaseURL, err := c.OptionService.GetBlogBaseURL(ctx)
 		if err != nil {
 			return nil, err
 		}
-		fullPath.WriteString(blogBaseUrl)
+		fullPath.WriteString(blogBaseURL)
 	}
 	fullPath.WriteString("/")
 	categoryPrefix, err := c.OptionService.GetOrByDefaultWithErr(ctx, property.CategoriesPrefix, "categories")
@@ -175,7 +181,7 @@ func (c categoryServiceImpl) ConvertToCategoryDTOs(ctx context.Context, categori
 	if err != nil {
 		return nil, err
 	}
-	blogBaseUrl, err := c.OptionService.GetBlogBaseURL(ctx)
+	blogBaseURL, err := c.OptionService.GetBlogBaseURL(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +207,7 @@ func (c categoryServiceImpl) ConvertToCategoryDTOs(ctx context.Context, categori
 
 		fullPath := strings.Builder{}
 		if isEnabled {
-			fullPath.WriteString(blogBaseUrl)
+			fullPath.WriteString(blogBaseURL)
 		}
 		fullPath.WriteString("/")
 		fullPath.WriteString(categoryPrefix.(string))
@@ -273,7 +279,6 @@ func (c categoryServiceImpl) Create(ctx context.Context, categoryParam *param.Ca
 }
 
 func (c *categoryServiceImpl) Update(ctx context.Context, categoryParam *param.Category) (*entity.Category, error) {
-
 	executor := newCategoryUpdateExecutor(ctx)
 	if err := executor.Update(ctx, categoryParam); err != nil {
 		return nil, err
@@ -285,7 +290,6 @@ func (c *categoryServiceImpl) Update(ctx context.Context, categoryParam *param.C
 }
 
 func (c categoryServiceImpl) UpdateBatch(ctx context.Context, categoryParams []*param.Category) ([]*entity.Category, error) {
-
 	executor := newCategoryUpdateExecutor(ctx)
 	if err := executor.UpdateBatch(ctx, categoryParams); err != nil {
 		return nil, err
@@ -360,7 +364,6 @@ func (c *categoryServiceImpl) GetChildCategory(ctx context.Context, parentCatego
 		}
 	}
 	return childs, nil
-
 }
 
 type categoryUpdateExecutor struct {
@@ -417,7 +420,6 @@ func (c *categoryUpdateExecutor) Update(ctx context.Context, categoryParam *para
 }
 
 func (c *categoryUpdateExecutor) UpdateBatch(ctx context.Context, categoryParams []*param.Category) error {
-
 	categories := make([]*entity.Category, 0)
 	for _, categoryParam := range categoryParams {
 		categories = append(categories, c.convertParam(categoryParam))
@@ -425,10 +427,16 @@ func (c *categoryUpdateExecutor) UpdateBatch(ctx context.Context, categoryParams
 
 	err := dal.Transaction(ctx, func(txCtx context.Context) error {
 		categoryDAL := dal.GetQueryByCtx(txCtx).Category
-		err := categoryDAL.WithContext(txCtx).Omit(categoryDAL.CreateTime).Save(categories...)
-		if err != nil {
-			return WrapDBErr(err)
+		for _, category := range categories {
+			resultInfo, err := categoryDAL.WithContext(txCtx).Where(categoryDAL.ID.Eq(category.ID)).Select(field.Star).Omit(categoryDAL.CreateTime).Updates(category)
+			if err != nil {
+				return WrapDBErr(err)
+			}
+			if resultInfo.RowsAffected != 1 {
+				return xerr.DB.New("").WithMsg("update failed")
+			}
 		}
+
 		if err := c.prepare(txCtx, categoryParams); err != nil {
 			return err
 		}
@@ -459,7 +467,6 @@ func (c *categoryUpdateExecutor) Delete(ctx context.Context, categoryID int32) e
 	parent, ok := c.AllCategory[curCategory.ParentID]
 
 	err := dal.Transaction(ctx, func(txCtx context.Context) error {
-
 		if ok && parent != nil {
 			if parent.Type == consts.CategoryTypeNormal && curCategory.Type == consts.CategoryTypeIntimate {
 				if err := c.refreshChildsType(txCtx, categoryID, consts.CategoryTypeNormal); err != nil {
@@ -550,7 +557,6 @@ func (c *categoryUpdateExecutor) prepare(ctx context.Context, categoryParams []*
 }
 
 func (c *categoryUpdateExecutor) getChildCategory(parentCategoryID int32) []*entity.Category {
-
 	parentIDToChild := make(map[int32][]*entity.Category)
 	for _, category := range c.AllCategory {
 		parentIDToChild[category.ParentID] = append(parentIDToChild[category.ParentID], category)
@@ -570,7 +576,6 @@ func (c *categoryUpdateExecutor) getChildCategory(parentCategoryID int32) []*ent
 		}
 	}
 	return childs
-
 }
 
 func (c *categoryUpdateExecutor) convertParam(categoryParam *param.Category) *entity.Category {
@@ -689,7 +694,6 @@ func (c *categoryUpdateExecutor) refreshAllType(ctx context.Context) error {
 }
 
 func (c *categoryUpdateExecutor) refreshPostStatus(ctx context.Context) error {
-
 	needEncryptPostID := make([]int32, 0)
 	needDecryptPostID := make([]int32, 0)
 	for id, post := range c.PostMap {
@@ -702,10 +706,8 @@ func (c *categoryUpdateExecutor) refreshPostStatus(ctx context.Context) error {
 		}
 		if status == consts.PostStatusIntimate {
 			needEncryptPostID = append(needEncryptPostID, id)
-		} else {
-			if post.Status == consts.PostStatusIntimate && post.Password == "" {
-				needDecryptPostID = append(needDecryptPostID, id)
-			}
+		} else if post.Status == consts.PostStatusIntimate && post.Password == "" {
+			needDecryptPostID = append(needDecryptPostID, id)
 		}
 	}
 	if len(needEncryptPostID) > 0 {
@@ -752,14 +754,12 @@ func (c *categoryUpdateExecutor) removePostCategory(ctx context.Context, categor
 	}
 	postCategoryDAL := dal.GetQueryByCtx(ctx).PostCategory
 	err := postCategoryDAL.WithContext(ctx).Create(postCategory...)
-
 	if err != nil {
 		return WrapDBErr(err)
 	}
 	_, err = postCategoryDAL.WithContext(ctx).Where(postCategoryDAL.CategoryID.Eq(categoryID)).Delete()
 
 	return WrapDBErr(err)
-
 }
 
 func (c *categoryUpdateExecutor) removeCategory(ctx context.Context, categoryID int32) error {
